@@ -2,17 +2,32 @@
 title: "Population Health and Economic Consequences of Weather Events in US"
 author: "Alan Wong"
 date: "4/2/2020"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Introduction
+# Synopsis
 Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
 
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+Specifically, the following questions will be addressed:  
+1. Across the United States, which types of events are most harmful with respect to population health?  
+2. Across the United States, which types of events have the greatest economic consequences?
+
+# Table of Contents
+
+- [Data](#data)
+- [Data Processing](#data-processing)  
+    - [Data Preview](#data-preview)
+    - [Data Transformation](#data-transformation)
+  
+- [Results](#results)  
+    - [Event Types Most Harmful to Population Health](#event-types-most-harmful-to-population-health)
+    - [Event Types with Greatest Economic Consequences](#event-types-with-greatest-economic-consequences)
 
 # Data
 The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site:
@@ -24,3 +39,110 @@ There is also some documentation of the database available. Here you will find h
 - National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
 
 The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+# Data Processing
+## Data Preview
+Data is downloaded from the NOAA's storm database, and is then loaded and previewed.
+
+```{r cache=TRUE}
+# Download Data
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+file.name <- "storm_data.csv.bz2"
+
+download.file(url, file.name)
+
+# Read Data
+df <- read.csv(file.name)
+print(head(df))
+```
+
+## Data Transformation
+Not all columns in the data set are relevant to our analysis.  We select only the relevant columns from our data.
+```{r cache=TRUE}
+library(dplyr)
+library(magrittr)
+
+df <- df %>%
+  dplyr::select(BGN_DATE, EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+```
+
+Since damage values are denoted in different scales, we have to first align them into a common scale of USD.
+```{r cache=TRUE}
+df <- df %>%
+  mutate(PROPDMGVAL = case_when(
+    PROPDMGEXP == '+' ~ PROPDMG * 10^0,
+    PROPDMGEXP %in% paste(seq(0,8)) ~ PROPDMG * 10^1,
+    PROPDMGEXP %in% c('H', 'h') ~ PROPDMG * 10^2,
+    PROPDMGEXP %in% c('K', 'k') ~ PROPDMG * 10^3,
+    PROPDMGEXP %in% c('M', 'm') ~ PROPDMG * 10^6,
+    PROPDMGEXP %in% c('B', 'b') ~ PROPDMG * 10^9,
+    TRUE ~ 0),
+    CROPDMGVAL = case_when(
+    CROPDMGEXP == '+' ~ CROPDMG * 10^0,
+    CROPDMGEXP %in% paste(seq(0,8)) ~ CROPDMG * 10^1,
+    CROPDMGEXP %in% c('H', 'h') ~ CROPDMG * 10^2,
+    CROPDMGEXP %in% c('K', 'k') ~ CROPDMG * 10^3,
+    CROPDMGEXP %in% c('M', 'm') ~ CROPDMG * 10^6,
+    CROPDMGEXP %in% c('B', 'b') ~ CROPDMG * 10^9,
+    TRUE ~ 0)
+  )
+```
+
+Next, we can calculate the total amount of damages, including property and crops damage.
+```{r cache=TRUE}
+df <- df %>%
+  mutate(TOTAL.ECONOMIC.IMPACT = PROPDMGVAL + CROPDMGVAL)
+```
+
+We can also calculate the total amount of casualties caused by the weather events.
+```{r cache=TRUE}
+df <- df %>%
+  mutate(TOTAL.HEALTH.IMPACT = FATALITIES + INJURIES)
+```
+
+Here, we consider only dates starting from 1/1/1996 as stated in the documentation.
+```{r cache=TRUE}
+df <- df %>%
+  filter(as.Date(BGN_DATE, '%m/%d/%Y') >= as.Date('1/1/1996', '%m/%d/%Y'))
+```
+
+# Results
+## Event Types Most Harmful to Population Health
+```{r cache=TRUE}
+top.pop.health.summary.df <- df %>%
+  group_by(EVTYPE) %>%
+  summarise(TOTAL.HEALTH.IMPACT = sum(TOTAL.HEALTH.IMPACT, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(TOTAL.HEALTH.IMPACT)) %>%
+  head(10)
+
+barplot(
+  top.pop.health.summary.df$TOTAL.HEALTH.IMPACT,
+  col = rainbow(10),
+  legend.text = top.pop.health.summary.df$EVTYPE,
+  ylab="Fatality + Injuries",
+  main="Top 10 Events Causing Fatality and Injuries"
+  )
+```
+
+Based on the plots, we can conclude that Tornadoes, Excessive Heat, and Floods are the most harmful events to population health.
+
+## Event Types with Greatest Economic Consequences
+```{r cache=TRUE}
+top.economic.impact.summary.df <- df %>%
+  group_by(EVTYPE) %>%
+  summarise(TOTAL.ECONOMIC.IMPACT = sum(TOTAL.ECONOMIC.IMPACT, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(TOTAL.ECONOMIC.IMPACT)) %>%
+  head(10)
+
+barplot(
+  top.economic.impact.summary.df$TOTAL.ECONOMIC.IMPACT,
+  col = rainbow(10),
+  legend.text = top.economic.impact.summary.df$EVTYPE,
+  ylab="Crop + Property Damages",
+  main="Top 10 Events Causing Crop and Property Damages"
+  )
+```
+
+Based on the plots, we can conclude that Floods, Hurricane/Typhoon, and Storm Surge causes the greatest economic consequences.
