@@ -3,3 +3,7 @@
 .RData
 .Ruserdata
 *.Rproj
+storm_data.csv.bz2
+weather-events_cache
+weather-events_files
+rsconnect
