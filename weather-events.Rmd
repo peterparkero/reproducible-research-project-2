@@ -2,7 +2,7 @@
 title: "Population Health and Economic Consequences of Weather Events in US"
 author: "Alan Wong"
 date: "4/2/2020"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
